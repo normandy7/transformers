@@ -23,6 +23,8 @@ import shutil
 import tempfile
 import traceback
 from pathlib import Path
+import multiprocessing
+
 
 from check_config_docstrings import get_checkpoint_from_config_class
 from datasets import load_dataset
@@ -1377,7 +1379,7 @@ def create_tiny_models(
         all_build_args.append((c, models_to_create, os.path.join(output_path, c.model_type)))
 
     from multiprocessing import Pool
-    with Pool(4) as pool:
+    with multiprocessing.Pool(4) as pool:
         results = pool.starmap(build, all_build_args)
         results = {buid_args[0]: result for buid_args, result in zip(all_build_args, results)}
 
@@ -1438,6 +1440,7 @@ def create_tiny_models(
 
 
 if __name__ == "__main__":
+    multiprocessing.set_start_method('spawn')
     ds = load_dataset("wikitext", "wikitext-2-raw-v1")
     training_ds = ds["train"]
     testing_ds = ds["test"]
