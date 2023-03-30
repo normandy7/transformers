@@ -1351,6 +1351,8 @@ def create_tiny_models(
     if not all:
         config_classes = [CONFIG_MAPPING[model_type] for model_type in model_types]
 
+    #config_classes = [c for c in config_classes if c.__name__ == "BertConfig"]
+
     # A map from config classes to tuples of processors (tokenizer, feature extractor, processor) classes
     processor_type_map = {c: get_processor_types_from_config_class(c) for c in config_classes}
 
@@ -1363,11 +1365,21 @@ def create_tiny_models(
             to_create[c] = {"processor": processors, "pytorch": models, "tensorflow": tf_models}
 
     results = {}
+
+    # for c, models_to_create in list(to_create.items()):
+    #     print(f"Create models for {c.__name__} ...")
+    #     result = build(c, models_to_create, output_dir=os.path.join(output_path, c.model_type))
+    #     results[c.__name__] = result
+    #     print("=" * 40)
+
+    all_build_args = []
     for c, models_to_create in list(to_create.items()):
-        print(f"Create models for {c.__name__} ...")
-        result = build(c, models_to_create, output_dir=os.path.join(output_path, c.model_type))
-        results[c.__name__] = result
-        print("=" * 40)
+        all_build_args.append((c, models_to_create, os.path.join(output_path, c.model_type)))
+
+    from multiprocessing import Pool
+    with Pool(4) as pool:
+        results = pool.starmap(build, all_build_args)
+        results = {buid_args[0]: result for buid_args, result in zip(all_build_args, results)}
 
     if upload:
         if organization is None:
