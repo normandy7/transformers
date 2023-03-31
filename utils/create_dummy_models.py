@@ -1049,6 +1049,10 @@ def build(config_class, models_to_create, output_dir):
             The directory to save all the checkpoints. Each model architecture will be saved in a subdirectory under
             it. Models in different frameworks with the same architecture will be saved in the same subdirectory.
     """
+    if data["train_ds"] is None or data["testing_ds"] is None:
+        ds = load_dataset("wikitext", "wikitext-2-raw-v1")
+        data["training_ds"] = ds["train"]
+        data["testing_ds"] = ds["test"]
 
     if config_class.model_type in [
         "encoder-decoder",
@@ -1345,10 +1349,6 @@ def create_tiny_models(
     pytorch_arch_mappings = [getattr(transformers_module, x) for x in _pytorch_arch_mappings]
     tensorflow_arch_mappings = [getattr(transformers_module, x) for x in _tensorflow_arch_mappings]
 
-    ds = load_dataset("wikitext", "wikitext-2-raw-v1")
-    data["training_ds"] = ds["train"]
-    data["testing_ds"] = ds["test"]
-
     config_classes = CONFIG_MAPPING.values()
     if not all:
         config_classes = [CONFIG_MAPPING[model_type] for model_type in model_types]
@@ -1442,8 +1442,8 @@ def create_tiny_models(
 if __name__ == "__main__":
     multiprocessing.set_start_method('spawn')
     ds = load_dataset("wikitext", "wikitext-2-raw-v1")
-    training_ds = ds["train"]
-    testing_ds = ds["test"]
+    data["training_ds"] = ds["train"]
+    data["testing_ds"] = ds["test"]
 
     def list_str(values):
         return values.split(",")
