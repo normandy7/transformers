@@ -1379,7 +1379,7 @@ def create_tiny_models(
     results = {}
 
     if num_workers is None:
-        num_workers = 1
+        num_workers = os.environ.get("NUM_WORKERS", 1)
     if num_workers <= 1:
         for c, models_to_create in list(to_create.items()):
             print(f"Create models for {c.__name__} ...")
