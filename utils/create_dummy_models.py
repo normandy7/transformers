@@ -1049,7 +1049,7 @@ def build(config_class, models_to_create, output_dir):
             The directory to save all the checkpoints. Each model architecture will be saved in a subdirectory under
             it. Models in different frameworks with the same architecture will be saved in the same subdirectory.
     """
-    if data["train_ds"] is None or data["testing_ds"] is None:
+    if data["training_ds"] is None or data["testing_ds"] is None:
         ds = load_dataset("wikitext", "wikitext-2-raw-v1")
         data["training_ds"] = ds["train"]
         data["testing_ds"] = ds["test"]
