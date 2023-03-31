@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - update_tiny_models*
+      - check_tiny_model_multi_proc*
   repository_dispatch:
   schedule:
     - cron: "0 2 * * *"
@@ -23,10 +24,35 @@ jobs:
 
       - name: Install
         run: |
-            python -m pip install -U .[dev]
-            python -m pip install -U natten
+          sudo apt-get -y update && sudo apt-get install -y libsndfile1-dev espeak-ng cmake
+          pip install --upgrade pip    
+          python -m pip install -U .[sklearn,torch,testing,sentencepiece,torch-speech,vision,timm,video,tf-cpu]
+          pip install tensorflow_probability
+          python -m pip install -U natten
 
-      - name: Update tiny models
+      - name: Create all tiny models (locally)
+        run: |
+          python utils/create_tiny_models.py tiny_local_models --all --num_workers 4
+
+      - name: Local tiny model reports artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: tiny_local_model_creation_reports
+          path: tiny_local_models/reports
+
+      - name: Run pipeline tests against all new (local) tiny models
+        run: |
+          OMP_NUM_THREADS=1 TINY_MODEL_HUB_ORG=tiny_local_models python -m pytest --max-worker-restart=0 -n 4 --dist=loadfile -s -rA --make-reports=tests_pipelines tests/models -m is_pipeline_test -k "test_pipeline_" | tee tests_output.txt
+
+      - name: Test suite reports artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: tiny_local_model_creation_reports
+          path: reports/tests_pipelines
+
+      - name: Create + Upload tiny models for new model architecture(s)
         run: | 
           python utils/update_tiny_models.py
 
@@ -39,7 +65,7 @@ jobs:
       - name: Summary report
         run: cat tiny_models/reports/tiny_model_summary.json
 
-      - name: Test suite reports artifacts
+      - name: New tiny model creation reports artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v3
         with:
