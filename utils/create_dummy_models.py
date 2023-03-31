@@ -18,13 +18,12 @@ import collections.abc
 import copy
 import inspect
 import json
+import multiprocessing
 import os
 import shutil
 import tempfile
 import traceback
 from pathlib import Path
-import multiprocessing
-
 
 from check_config_docstrings import get_checkpoint_from_config_class
 from datasets import load_dataset
@@ -681,12 +680,22 @@ def convert_processors(processors, tiny_config, output_folder, result):
 
     if hasattr(tiny_config, "max_position_embeddings") and tiny_config.max_position_embeddings > 0:
         if fast_tokenizer is not None:
-            if fast_tokenizer.__class__.__name__ in ["RobertaTokenizerFast", "XLMRobertaTokenizerFast", "LongformerTokenizerFast", "MPNetTokenizerFast"]:
+            if fast_tokenizer.__class__.__name__ in [
+                "RobertaTokenizerFast",
+                "XLMRobertaTokenizerFast",
+                "LongformerTokenizerFast",
+                "MPNetTokenizerFast",
+            ]:
                 fast_tokenizer.model_max_length = tiny_config.max_position_embeddings - 2
             else:
                 fast_tokenizer.model_max_length = tiny_config.max_position_embeddings
         if slow_tokenizer is not None:
-            if slow_tokenizer.__class__.__name__ in ["RobertaTokenizer", "XLMRobertaTokenizer", "LongformerTokenizer", "MPNetTokenizer"]:
+            if slow_tokenizer.__class__.__name__ in [
+                "RobertaTokenizer",
+                "XLMRobertaTokenizer",
+                "LongformerTokenizer",
+                "MPNetTokenizer",
+            ]:
                 slow_tokenizer.model_max_length = tiny_config.max_position_embeddings - 2
             else:
                 slow_tokenizer.model_max_length = tiny_config.max_position_embeddings
@@ -1329,6 +1338,7 @@ def create_tiny_models(
     upload,
     organization,
     token,
+    num_workers=None,
 ):
     clone_path = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
     if os.getcwd() != clone_path:
@@ -1353,7 +1363,7 @@ def create_tiny_models(
     if not all:
         config_classes = [CONFIG_MAPPING[model_type] for model_type in model_types]
 
-    #config_classes = [c for c in config_classes if c.__name__ == "BertConfig"]
+    # config_classes = [c for c in config_classes if c.__name__ == "BertConfig"]
 
     # A map from config classes to tuples of processors (tokenizer, feature extractor, processor) classes
     processor_type_map = {c: get_processor_types_from_config_class(c) for c in config_classes}
@@ -1368,20 +1378,21 @@ def create_tiny_models(
 
     results = {}
 
-    # for c, models_to_create in list(to_create.items()):
-    #     print(f"Create models for {c.__name__} ...")
-    #     result = build(c, models_to_create, output_dir=os.path.join(output_path, c.model_type))
-    #     results[c.__name__] = result
-    #     print("=" * 40)
-
-    all_build_args = []
-    for c, models_to_create in list(to_create.items()):
-        all_build_args.append((c, models_to_create, os.path.join(output_path, c.model_type)))
-
-    from multiprocessing import Pool
-    with multiprocessing.Pool(4) as pool:
-        results = pool.starmap(build, all_build_args)
-        results = {buid_args[0].__name__: result for buid_args, result in zip(all_build_args, results)}
+    if num_workers is None:
+        num_workers = os.environ.get("NUM_WORKERS", 1)
+    if num_workers <= 1:
+        for c, models_to_create in list(to_create.items()):
+            print(f"Create models for {c.__name__} ...")
+            result = build(c, models_to_create, output_dir=os.path.join(output_path, c.model_type))
+            results[c.__name__] = result
+            print("=" * 40)
+    else:
+        all_build_args = []
+        for c, models_to_create in list(to_create.items()):
+            all_build_args.append((c, models_to_create, os.path.join(output_path, c.model_type)))
+        with multiprocessing.Pool() as pool:
+            results = pool.starmap(build, all_build_args)
+            results = {buid_args[0].__name__: result for buid_args, result in zip(all_build_args, results)}
 
     if upload:
         if organization is None:
@@ -1440,7 +1451,7 @@ def create_tiny_models(
 
 
 if __name__ == "__main__":
-    multiprocessing.set_start_method('spawn')
+    multiprocessing.set_start_method("spawn")
     ds = load_dataset("wikitext", "wikitext-2-raw-v1")
     data["training_ds"] = ds["train"]
     data["testing_ds"] = ds["test"]
@@ -1480,6 +1491,7 @@ if __name__ == "__main__":
         "--token", default=None, type=str, help="A valid authentication token for HuggingFace Hub with write access."
     )
     parser.add_argument("output_path", type=Path, help="Path indicating where to store generated model.")
+    parser.add_argument("--num_workers", default=1, type=int, help="The number of workers to run.")
 
     args = parser.parse_args()
 
@@ -1495,4 +1507,5 @@ if __name__ == "__main__":
         args.upload,
         args.organization,
         args.token,
+        args.num_workers,
     )
